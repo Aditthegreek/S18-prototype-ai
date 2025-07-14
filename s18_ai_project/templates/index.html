@@ -1,0 +1,200 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S-18 Prototype AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0fdf4; /* Light green background */
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-2xl border border-green-200">
+        <h1 class="text-3xl font-bold text-center text-green-800 mb-6">S-18 Prototype AI</h1>
+        <p class="text-center text-gray-600 mb-8">Enter overall sensor data and plant types per floor to get farm assessment and commands.</p>
+
+        <form id="farmDataForm" class="space-y-6">
+            <!-- Overall Sensor Inputs (Manual) -->
+            <div class="bg-blue-50 p-6 rounded-lg border border-blue-200 shadow-inner">
+                <h2 class="text-xl font-semibold text-blue-700 mb-4">Overall Farm Sensor Data</h2>
+                <label for="overall_humidity" class="block text-gray-700 text-sm font-bold mb-2">Humidity (%)</label>
+                <input type="number" id="overall_humidity" name="overall_humidity" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-blue-500" placeholder="e.g., 60" min="0" max="100" required>
+
+                <label for="overall_temperature" class="block text-gray-700 text-sm font-bold mb-2 mt-4">Temperature (°C)</label>
+                <input type="number" id="overall_temperature" name="overall_temperature" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-blue-500" placeholder="e.g., 25" min="0" max="50" required>
+
+                <label for="overall_nutrients_ml" class="block text-gray-700 text-sm font-bold mb-2 mt-4">Nutrients (ml)</label>
+                <input type="number" id="overall_nutrients_ml" name="overall_nutrients_ml" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-blue-500" placeholder="e.g., 100" min="0" required>
+
+                <label for="overall_nutrient_type" class="block text-gray-700 text-sm font-bold mb-2 mt-4">Nutrient Type (e.g., General Hydroponics FloraGro)</label>
+                <input type="text" id="overall_nutrient_type" name="overall_nutrient_type" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-blue-500" placeholder="e.g., FloraGro, MasterBlend, etc." required>
+            </div>
+
+            <!-- Floor 1 Plant Types -->
+            <div class="bg-green-50 p-6 rounded-lg border border-green-200 shadow-inner">
+                <h2 class="text-xl font-semibold text-green-700 mb-4">Floor 1 Plant Types</h2>
+                <label for="floor1_plant_types" class="block text-gray-700 text-sm font-bold mb-2">Plant Types (comma-separated)</label>
+                <input type="text" id="floor1_plant_types" name="floor1_plant_types" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-green-500" placeholder="e.g., lettuce,basil" required>
+            </div>
+
+            <!-- Floor 2 Plant Types -->
+            <div class="bg-green-50 p-6 rounded-lg border border-green-200 shadow-inner">
+                <h2 class="text-xl font-semibold text-green-700 mb-4">Floor 2 Plant Types</h2>
+                <label for="floor2_plant_types" class="block text-gray-700 text-sm font-bold mb-2">Plant Types (comma-separated)</label>
+                <input type="text" id="floor2_plant_types" name="floor2_plant_types" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-green-500" placeholder="e.g., tomato" required>
+            </div>
+
+            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-200 transform hover:scale-105">
+                Get Assessment
+            </button>
+        </form>
+
+        <div id="loadingIndicator" class="hidden text-center text-green-600 mt-6">
+            <svg class="animate-spin h-8 w-8 text-green-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-2">Assessing farm conditions...</p>
+        </div>
+
+        <div id="results" class="mt-8 hidden">
+            <h2 class="text-2xl font-bold text-green-800 mb-4 text-center">Overall Farm Assessment</h2>
+            <div id="overallAssessmentContent" class="bg-gray-50 p-5 rounded-lg border border-gray-200 shadow-sm mb-6">
+                <!-- Overall assessment details will be injected here -->
+            </div>
+            <div id="floorAssessments" class="space-y-6">
+                <!-- Per-floor plant type feedback will be injected here -->
+            </div>
+            <div id="overallCommands" class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 class="text-lg font-semibold text-blue-700 mb-2">Overall Arduino Commands:</h3>
+                <pre class="bg-blue-100 p-3 rounded-md text-sm text-blue-800 overflow-auto whitespace-pre-wrap"></pre>
+            </div>
+            <div id="overallSuggestions" class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h3 class="text-lg font-semibold text-yellow-700 mb-2">Overall Suggestions:</h3>
+                <ul class="list-disc list-inside text-sm text-yellow-800"></ul>
+            </div>
+        </div>
+
+        <div id="errorMessage" class="mt-8 hidden p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg" role="alert">
+            <p class="font-bold">Error:</p>
+            <p id="errorText"></p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('farmDataForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const resultsDiv = document.getElementById('results');
+            const errorMessageDiv = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+
+            loadingIndicator.classList.remove('hidden');
+            resultsDiv.classList.add('hidden');
+            errorMessageDiv.classList.add('hidden');
+            errorText.textContent = '';
+
+            const farmData = {
+                overall_humidity: parseFloat(document.getElementById('overall_humidity').value),
+                overall_temperature: parseFloat(document.getElementById('overall_temperature').value), // Changed from water_level
+                overall_nutrients_ml: parseFloat(document.getElementById('overall_nutrients_ml').value), // Changed to ml
+                overall_nutrient_type: document.getElementById('overall_nutrient_type').value, // Added nutrient type
+                plant_types_per_floor: {
+                    "Floor 1": document.getElementById('floor1_plant_types').value.split(',').map(s => s.trim()).filter(s => s.length > 0),
+                    "Floor 2": document.getElementById('floor2_plant_types').value.split(',').map(s => s.trim()).filter(s => s.length > 0)
+                }
+            };
+
+            try {
+                const response = await fetch('/assess', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(farmData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Something went wrong on the server.');
+                }
+
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) {
+                console.error('Error:', error);
+                errorText.textContent = error.message;
+                errorMessageDiv.classList.remove('hidden');
+            } finally {
+                loadingIndicator.classList.add('hidden');
+            }
+        });
+
+        function displayResults(data) {
+            const overallAssessmentContent = document.getElementById('overallAssessmentContent');
+            const floorAssessments = document.getElementById('floorAssessments');
+            overallAssessmentContent.innerHTML = '';
+            floorAssessments.innerHTML = '';
+
+            // Display overall assessment details
+            const overallHtml = `
+                <p><span class="font-semibold">Current Humidity:</span> ${data.overall_assessment.current_humidity}%</p>
+                <p><span class="font-semibold">Current Temperature:</span> ${data.overall_assessment.current_temperature}°C</p>
+                <p><span class="font-semibold">Nutrients Added:</span> ${data.overall_assessment.nutrients_given_ml} ml (${data.overall_assessment.nutrient_type})</p>
+                <p><span class="font-semibold">Overall Growth Status:</span> <span class="${getGrowthStatusColor(data.overall_assessment.overall_growth_status)}">${data.overall_assessment.overall_growth_status}</span></p>
+                <p><span class="font-semibold">Temperature Adjustment:</span> ${data.overall_assessment.temperature_adjustment_direction}</p>
+                <div class="mt-3">
+                    <p class="font-semibold">Overall Feedback:</p>
+                    <ul class="list-disc list-inside text-sm text-gray-700">
+                        ${data.overall_assessment.feedback.map(f => `<li>${f}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+            overallAssessmentContent.innerHTML = overallHtml;
+
+            // Display per-floor plant type feedback
+            for (const floorId in data.farm_assessment_per_floor) {
+                const floorResult = data.farm_assessment_per_floor[floorId];
+                const floorHtml = `
+                    <div class="bg-green-50 p-5 rounded-lg border border-green-200 shadow-sm">
+                        <h3 class="text-xl font-bold text-green-700 mb-3">${floorResult.floor_id} Plant Assessment</h3>
+                        <p><span class="font-semibold">Plant Types:</span> ${floorResult.plant_types.join(', ') || 'N/A'}</p>
+                        <div class="mt-3">
+                            <p class="font-semibold">Floor-Specific Plant Feedback:</p>
+                            <ul class="list-disc list-inside text-sm text-gray-700">
+                                ${floorResult.feedback.map(f => `<li>${f}</li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                floorAssessments.innerHTML += floorHtml;
+            }
+
+
+            // Display overall commands and suggestions
+            document.querySelector('#overallCommands pre').textContent = data.overall_arduino_commands.join('\n');
+            const overallSuggestionsList = document.querySelector('#overallSuggestions ul');
+            overallSuggestionsList.innerHTML = data.overall_suggestions.map(s => `<li>${s}</li>`).join('');
+
+            document.getElementById('results').classList.remove('hidden');
+        }
+
+        function getGrowthStatusColor(status) {
+            switch (status) {
+                case 'Excellent': return 'text-green-600';
+                case 'Good': return 'text-blue-600';
+                case 'Fair': return 'text-yellow-600';
+                case 'Poor': return 'text-red-600';
+                default: return 'text-gray-600';
+            }
+        }
+    </script>
+</body>
+</html>
