@@ -1,8 +1,7 @@
-# app.py
 
-from flask import Flask, request, jsonify, render_template, make_response # Import make_response
+from flask import Flask, request, jsonify, render_template, make_response
 import json
-import time
+import time # Import time module for cache busting
 
 app = Flask(__name__)
 
@@ -23,23 +22,27 @@ class HydroponicsAI:
         """
         # Define general thresholds for optimal conditions
         self.optimal_humidity_range = (50, 70)  # %
-        self.optimal_water_level_range = (70, 90) # % of reservoir capacity
+        self.optimal_temperature_range = (20, 28) # °C - Added for temperature
+        # self.optimal_water_level_range = (70, 90) # % of reservoir capacity - Removed
 
         # Define plant-specific ideal conditions (simplified for demonstration)
         self.plant_profiles = {
             "lettuce": {
                 "ideal_humidity": 60,
-                "ideal_water_level": 80,
+                "ideal_temperature": 22, # Added ideal temperature
+                # "ideal_water_level": 80, # Removed
                 "growth_rate_factor": 1.0
             },
             "tomato": {
                 "ideal_humidity": 65,
-                "ideal_water_level": 85,
+                "ideal_temperature": 25, # Added ideal temperature
+                # "ideal_water_level": 85, # Removed
                 "growth_rate_factor": 1.2
             },
             "basil": {
                 "ideal_humidity": 55,
-                "ideal_water_level": 75,
+                "ideal_temperature": 24, # Added ideal temperature
+                # "ideal_water_level": 75, # Removed
                 "growth_rate_factor": 0.9
             },
         }
@@ -53,12 +56,12 @@ class HydroponicsAI:
             print(f"Warning: Plant type '{plant_type}' not found. Using default thresholds.")
             return {
                 "ideal_humidity": sum(self.optimal_humidity_range) / 2,
-                "ideal_water_level": sum(self.optimal_water_level_range) / 2,
+                "ideal_temperature": sum(self.optimal_temperature_range) / 2, # Default for temperature
                 "growth_rate_factor": 1.0
             }
         return profile
 
-    def assess_overall_farm(self, humidity: float, water_level: float,
+    def assess_overall_farm(self, humidity: float, temperature: float, # Changed water_level to temperature
                             overall_plant_types: list[str], nutrients_given_ml: float,
                             nutrient_type: str) -> dict:
         """
@@ -67,7 +70,7 @@ class HydroponicsAI:
 
         Args:
             humidity (float): Overall current humidity percentage.
-            water_level (float): Overall current water level percentage.
+            temperature (float): Overall current temperature in Celsius. # Changed water_level to temperature
             overall_plant_types (list[str]): List of ALL plant types across all floors.
             nutrients_given_ml (float): Amount of nutrients given in milliliters (ml).
             nutrient_type (str): The type or brand of nutrient used.
@@ -78,21 +81,22 @@ class HydroponicsAI:
         feedback = []
         suggestions = []
         arduino_commands = []
-        growth_score = 0 # Max score is 2 now (humidity, water level)
+        growth_score = 0 # Max score is 2 now (humidity, temperature)
 
-        # Calculate average ideal water level for ALL plants across the farm
+        # Calculate average ideal temperature for ALL plants across the farm
         if not overall_plant_types:
-            feedback.append("No plant types specified for the farm. Using general optimal water level range.")
-            avg_ideal_water_level = sum(self.optimal_water_level_range) / 2
+            feedback.append("No plant types specified for the farm. Using general optimal temperature range.")
+            avg_ideal_temperature = sum(self.optimal_temperature_range) / 2
         else:
-            total_ideal_water_level = 0
+            total_ideal_temperature = 0
             valid_plant_count = 0
             for p_type in overall_plant_types:
                 profile = self._get_plant_profile(p_type)
-                total_ideal_water_level += profile["ideal_water_level"]
+                total_ideal_temperature += profile["ideal_temperature"]
                 valid_plant_count += 1
-            avg_ideal_water_level = total_ideal_water_level / valid_plant_count if valid_plant_count > 0 else sum(self.optimal_water_level_range) / 2
-            feedback.append(f"Calculated average ideal water level for all plants in the farm: {avg_ideal_water_level:.1f}%")
+            avg_ideal_temperature = total_ideal_temperature / valid_plant_count if valid_plant_count > 0 else sum(self.optimal_temperature_range) / 2
+            feedback.append(f"Calculated average ideal temperature for all plants in the farm: {avg_ideal_temperature:.1f}°C")
+
 
         # --- Humidity Assessment ---
         if self.optimal_humidity_range[0] <= humidity <= self.optimal_humidity_range[1]:
@@ -105,26 +109,27 @@ class HydroponicsAI:
             feedback.append("Overall humidity is too high. Risk of mold/disease, especially offshore.")
             suggestions.append("Ensure adequate overall ventilation/dehumidification.")
 
-        # --- Water Level Assessment & Pump Commands ---
-        water_level_buffer = 5 # % buffer for water level adjustments
+        # --- Temperature Assessment & Control Commands ---
+        temperature_buffer = 2 # °C buffer for temperature adjustments
 
-        if water_level < (avg_ideal_water_level - water_level_buffer):
-            feedback.append(f"Overall water level ({water_level:.1f}%) is low, below average ideal ({avg_ideal_water_level:.1f}%). Needs replenishment.")
-            suggestions.append(f"Increase overall water level to around {avg_ideal_water_level:.1f}%.")
-            arduino_commands.append("PUMP_ON") # Unified command
-            water_adjustment_direction = "increase"
-        elif water_level > (avg_ideal_water_level + water_level_buffer):
-            feedback.append(f"Overall water level ({water_level:.1f}%) is high, above average ideal ({avg_ideal_water_level:.1f}%). Risk of root rot.")
-            suggestions.append(f"Decrease overall water level to around {avg_ideal_water_level:.1f}%.")
-            arduino_commands.append("VALVE_OPEN_DRAIN") # Unified command
-            water_adjustment_direction = "decrease"
+        if temperature < (avg_ideal_temperature - temperature_buffer):
+            feedback.append(f"Overall temperature ({temperature:.1f}°C) is too low, below average ideal ({avg_ideal_temperature:.1f}°C). Plant growth may be stunted.")
+            suggestions.append(f"Increase overall temperature to around {avg_ideal_temperature:.1f}°C. Activate heating elements.")
+            arduino_commands.append("HEATER_ON") # Unified command
+            temperature_adjustment_direction = "increase"
+        elif temperature > (avg_ideal_temperature + temperature_buffer):
+            feedback.append(f"Overall temperature ({temperature:.1f}°C) is too high, above average ideal ({avg_ideal_temperature:.1f}°C). Risk of heat stress.")
+            suggestions.append(f"Decrease overall temperature to around {avg_ideal_temperature:.1f}°C. Activate cooling fans.")
+            arduino_commands.append("FAN_ON") # Unified command
+            temperature_adjustment_direction = "decrease"
         else:
             growth_score += 1
-            feedback.append(f"Overall water level ({water_level:.1f}%) is within optimal range for the farm.")
-            arduino_commands.append("PUMP_OFF") # Ensure pump is off if level is good
-            water_adjustment_direction = "stable"
+            feedback.append(f"Overall temperature ({temperature:.1f}°C) is within optimal range for the farm.")
+            arduino_commands.append("FAN_OFF") # Ensure cooling/heating is off if temperature is good
+            arduino_commands.append("HEATER_OFF")
+            temperature_adjustment_direction = "stable"
 
-        # --- Nutrient Assessment (based on ml and type, not PPM) ---
+        # --- Nutrient Assessment (based on ml and type) ---
         feedback.append(f"Nutrients provided: {nutrients_given_ml} ml of '{nutrient_type}'.")
         suggestions.append("Always refer to the manufacturer's feeding chart for the specific nutrient type and plant growth stage.")
         suggestions.append("Regularly monitor the Electrical Conductivity (EC) of your nutrient solution to ensure proper concentration, as ml dosage can vary based on concentrate strength.")
@@ -145,13 +150,13 @@ class HydroponicsAI:
 
         return {
             "current_humidity": humidity,
-            "current_water_level": water_level,
-            "nutrients_given_ml": nutrients_given_ml, # Changed to ml
-            "nutrient_type": nutrient_type, # Added nutrient type
+            "current_temperature": temperature, # Changed water_level to temperature
+            "nutrients_given_ml": nutrients_given_ml,
+            "nutrient_type": nutrient_type,
             "overall_growth_status": overall_growth_status,
             "feedback": feedback,
             "suggestions": suggestions,
-            "water_adjustment_direction": water_adjustment_direction,
+            "temperature_adjustment_direction": temperature_adjustment_direction, # Changed water_adjustment_direction
             "arduino_commands": arduino_commands
         }
 
@@ -201,14 +206,14 @@ def assess():
     try:
         # Get sensor data directly from the POST request
         overall_humidity = data.get("overall_humidity")
-        overall_water_level = data.get("overall_water_level")
-        overall_nutrients_ml = data.get("overall_nutrients_ml") # Changed to ml
-        overall_nutrient_type = data.get("overall_nutrient_type") # Added nutrient type
+        overall_temperature = data.get("overall_temperature") # Changed from water_level
+        overall_nutrients_ml = data.get("overall_nutrients_ml")
+        overall_nutrient_type = data.get("overall_nutrient_type")
         plant_types_per_floor = data.get("plant_types_per_floor", {})
 
         # Basic validation for required sensor data
-        if any(val is None for val in [overall_humidity, overall_water_level, overall_nutrients_ml, overall_nutrient_type]):
-            return jsonify({"error": "Missing sensor data (humidity, water level, nutrients ml, or nutrient type)."}), 400
+        if any(val is None for val in [overall_humidity, overall_temperature, overall_nutrients_ml, overall_nutrient_type]): # Updated validation
+            return jsonify({"error": "Missing sensor data (humidity, temperature, nutrients ml, or nutrient type)."}), 400 # Updated error message
 
         # Aggregate all plant types from all floors for overall assessment
         all_plant_types = []
@@ -219,10 +224,10 @@ def assess():
         # Perform overall farm assessment using the manual input data
         overall_assessment_result = ai_system.assess_overall_farm(
             humidity=overall_humidity,
-            water_level=overall_water_level,
+            temperature=overall_temperature, # Changed water_level to temperature
             overall_plant_types=all_plant_types,
-            nutrients_given_ml=overall_nutrients_ml, # Changed to ml
-            nutrient_type=overall_nutrient_type # Added nutrient type
+            nutrients_given_ml=overall_nutrients_ml,
+            nutrient_type=overall_nutrient_type
         )
 
         # Perform per-floor plant type assessment (without sensor data)
